@@ -4,25 +4,25 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- 1. ROBUST BASE PATH DETECTION ---
     const getBasePath = () => {
         const path = window.location.pathname;
+        // The name of your GitHub repository
         const repoName = '/bmcri-website';
 
         // Check if we are hosted on GitHub Pages (or a folder named bmcri-website)
-        // If yes, the Root is "/bmcri-website/"
+        // If the URL starts with "/bmcri-website", that is our root.
         if (path.indexOf(repoName) === 0) {
             return repoName + '/';
         }
 
         // Otherwise, we are at the server root (Vercel, Live Server root, etc.)
-        // The Root is simply "/"
         return '/';
     };
 
     const BASE = getBasePath();
-    console.log("Calculated Site Base:", BASE);
+    console.log("Calculated Site Base:", BASE); // Check console to verify path
 
     // --- 2. HELPER: Fix Links AND Images ---
     function fixNavLinks() {
-        // Target all links and images in the Header and Footer
+        // Target all links and images in the global header and footer
         const selectors = '#global-header a[href], #global-footer a[href], #global-header img[src], #global-footer img[src]';
 
         document.querySelectorAll(selectors).forEach(el => {
@@ -38,15 +38,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
             // CLEAN THE PATH: 
             // 1. Remove leading './' or '/'
-            // 2. Remove leading '../' (recursively, just in case)
-            // This ensures we have a clean string like "assets/css/style.css" or "about.html"
+            // 2. Remove leading '../' (recursively) to prevent "up-directory" errors
+            // This assumes your header.html links are written relative to the Home Page.
             let cleanPath = val.replace(/^(\.?\/)/, '');
+
+            // Strip any "../" attempts (e.g. "../index.html" becomes "index.html")
             while (cleanPath.startsWith('../')) {
                 cleanPath = cleanPath.substring(3);
             }
 
             // APPLY BASE:
             // Result is always Absolute: "/about.html" or "/bmcri-website/about.html"
+            // This works from ANY depth (level 1, 2, or 10)
             el.setAttribute(attr, BASE + cleanPath);
         });
     }
@@ -153,7 +156,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch(BASE + "homepage.html");
             if (res.ok) {
                 mainContent.innerHTML = await res.text();
-                fixNavLinks(); // Run fix again in case homepage.html has relative links
+                fixNavLinks(); // Run fix again for homepage content
                 initScrollReveal();
                 initSlideshow();
             }
@@ -165,14 +168,12 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- 7. NAVIGATION LOGIC ---
     function initNavigation() {
         const currentPath = window.location.pathname;
-        // Clean up current path to handle Vercel's clean URLs if necessary
         const currentFile = currentPath.split('/').pop() || 'index.html';
 
         document.querySelectorAll(".nav-list a").forEach(link => {
             const href = link.getAttribute("href");
             if (!href) return;
-
-            // Highlight logic: Check if the link href ends with the current filename
+            // Robust active check
             if (href.endsWith(currentFile)) {
                 link.classList.add("active");
                 const parent = link.closest(".nav-item");
@@ -180,7 +181,6 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // Mobile Menu Logic
         const btn = document.querySelector(".mobile-menu-toggle");
         const nav = document.querySelector(".nav-list");
         const overlay = document.getElementById("sidebar-overlay");
@@ -201,12 +201,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 const link = e.target.closest("a");
                 if (!link) return;
                 const sub = link.nextElementSibling;
-                // Handle Dropdowns
                 if (sub && (sub.matches('.dropdown-menu') || sub.matches('.dropdown-submenu'))) {
                     e.preventDefault(); e.stopPropagation();
                     link.parentElement.classList.toggle("dropdown-active");
                 } else {
-                    // Close menu on normal link click
                     toggle(true);
                 }
             };
