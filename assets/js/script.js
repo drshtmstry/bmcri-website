@@ -1,55 +1,46 @@
 document.addEventListener("DOMContentLoaded", () => {
     "use strict";
 
-    // --- 1. ROBUST BASE PATH DETECTION ---
-    const getBasePath = () => {
-        const path = window.location.pathname;
-        // The name of your GitHub repository
-        const repoName = '/bmcri-website';
+    // --- 1. SMART BASE DETECTION (Piggyback Strategy) ---
+    // Instead of guessing the URL, we look at how you linked style.css
+    // pattern: [../../]assets/css/style.css
+    const getRelativeBase = () => {
+        const cssLink = document.querySelector('link[href*="style.css"]');
+        if (!cssLink) return './'; // Fallback
 
-        // Check if we are hosted on GitHub Pages (or a folder named bmcri-website)
-        // If the URL starts with "/bmcri-website", that is our root.
-        if (path.indexOf(repoName) === 0) {
-            return repoName + '/';
-        }
+        const href = cssLink.getAttribute('href');
+        // Remove "assets/css/style.css" from the end
+        // What remains is the relative path to root (e.g., "../../" or "")
+        const basePath = href.split('assets/css/style.css')[0];
 
-        // Otherwise, we are at the server root (Vercel, Live Server root, etc.)
-        return '/';
+        return basePath || './';
     };
 
-    const BASE = getBasePath();
-    console.log("Calculated Site Base:", BASE); // Check console to verify path
+    const BASE = getRelativeBase();
+    console.log("Calculated Relative Base:", BASE);
 
     // --- 2. HELPER: Fix Links AND Images ---
     function fixNavLinks() {
-        // Target all links and images in the global header and footer
         const selectors = '#global-header a[href], #global-footer a[href], #global-header img[src], #global-footer img[src]';
 
         document.querySelectorAll(selectors).forEach(el => {
             const attr = el.tagName === 'IMG' ? 'src' : 'href';
             const val = el.getAttribute(attr);
 
-            // Safety Check: Skip empty, external, mailto, tel, javascript, or anchors
+            // Skip external links, anchors, or special protocols
             if (!val || val.startsWith('http') || val.startsWith('//') ||
                 val.startsWith('mailto:') || val.startsWith('tel:') ||
-                val.startsWith('#') || val.startsWith('data:')) {
-                return;
-            }
+                val.startsWith('#') || val.startsWith('data:')) return;
 
-            // CLEAN THE PATH: 
-            // 1. Remove leading './' or '/'
-            // 2. Remove leading '../' (recursively) to prevent "up-directory" errors
-            // This assumes your header.html links are written relative to the Home Page.
+            // 1. Clean the path: remove leading './' or '/'
+            // 2. Remove any existing '../' to start fresh
+            // This assumes all Header links are written relative to Home (e.g., "departments/anatomy.html")
             let cleanPath = val.replace(/^(\.?\/)/, '');
-
-            // Strip any "../" attempts (e.g. "../index.html" becomes "index.html")
             while (cleanPath.startsWith('../')) {
                 cleanPath = cleanPath.substring(3);
             }
 
-            // APPLY BASE:
-            // Result is always Absolute: "/about.html" or "/bmcri-website/about.html"
-            // This works from ANY depth (level 1, 2, or 10)
+            // 3. Prepend the calculated BASE (e.g., "../../" + "index.html")
             el.setAttribute(attr, BASE + cleanPath);
         });
     }
@@ -131,14 +122,14 @@ document.addEventListener("DOMContentLoaded", () => {
             const headerHTML = await getComp('header.html');
             if (headerHTML) {
                 document.getElementById('global-header').innerHTML = headerHTML;
-                fixNavLinks(); // Fix links immediately after injecting header
+                fixNavLinks(); // Fix links relative to THIS page
                 initNavigation();
             }
 
             const footerHTML = await getComp('footer.html');
             if (footerHTML) {
                 document.getElementById('global-footer').innerHTML = footerHTML;
-                fixNavLinks(); // Fix links immediately after injecting footer
+                fixNavLinks();
                 const yearEl = document.getElementById("current-year");
                 if (yearEl) yearEl.textContent = new Date().getFullYear();
             }
@@ -156,7 +147,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const res = await fetch(BASE + "homepage.html");
             if (res.ok) {
                 mainContent.innerHTML = await res.text();
-                fixNavLinks(); // Run fix again for homepage content
+                fixNavLinks();
                 initScrollReveal();
                 initSlideshow();
             }
