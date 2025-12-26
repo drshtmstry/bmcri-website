@@ -1820,7 +1820,7 @@ select {
 .dev-name {
   font-size: 0.9rem;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--text-main);
   letter-spacing: 0.3px;
   transition: color 0.3s ease;
 }
