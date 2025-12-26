@@ -1,45 +1,52 @@
 document.addEventListener("DOMContentLoaded", () => {
     "use strict";
 
-    // --- 1. SMART BASE PATH DETECTION (Works on all pages) ---
+    // --- 1. ROBUST BASE PATH DETECTION ---
     const getBasePath = () => {
-        // A. If SITE_BASE was manually set in HTML, use it.
-        if (window.SITE_BASE) return window.SITE_BASE;
-
-        // B. Detect GitHub Pages or Subfolder
-        const repoName = '/bmcri-website';
         const path = window.location.pathname;
+        const repoName = '/bmcri-website';
 
-        // If the URL starts with "/bmcri-website", we are on GitHub or a matching local folder
+        // Check if we are hosted on GitHub Pages (or a folder named bmcri-website)
+        // If yes, the Root is "/bmcri-website/"
         if (path.indexOf(repoName) === 0) {
             return repoName + '/';
         }
 
-        // C. Default to Root (Vercel / Live Server root)
+        // Otherwise, we are at the server root (Vercel, Live Server root, etc.)
+        // The Root is simply "/"
         return '/';
     };
 
     const BASE = getBasePath();
-    console.log("Current Base Path:", BASE); // Debugging help
+    console.log("Calculated Site Base:", BASE);
 
     // --- 2. HELPER: Fix Links AND Images ---
     function fixNavLinks() {
-        // Select links/images in global areas
+        // Target all links and images in the Header and Footer
         const selectors = '#global-header a[href], #global-footer a[href], #global-header img[src], #global-footer img[src]';
 
         document.querySelectorAll(selectors).forEach(el => {
             const attr = el.tagName === 'IMG' ? 'src' : 'href';
             const val = el.getAttribute(attr);
 
-            // Skip external links (http), anchors (#), or data/mail protocols
+            // Safety Check: Skip empty, external, mailto, tel, javascript, or anchors
             if (!val || val.startsWith('http') || val.startsWith('//') ||
                 val.startsWith('mailto:') || val.startsWith('tel:') ||
-                val.startsWith('#') || val.startsWith('data:')) return;
+                val.startsWith('#') || val.startsWith('data:')) {
+                return;
+            }
 
-            // Clean the path (remove leading ./ or /)
-            const cleanPath = val.replace(/^(\.?\/)/, '');
+            // CLEAN THE PATH: 
+            // 1. Remove leading './' or '/'
+            // 2. Remove leading '../' (recursively, just in case)
+            // This ensures we have a clean string like "assets/css/style.css" or "about.html"
+            let cleanPath = val.replace(/^(\.?\/)/, '');
+            while (cleanPath.startsWith('../')) {
+                cleanPath = cleanPath.substring(3);
+            }
 
-            // Apply the calculated BASE
+            // APPLY BASE:
+            // Result is always Absolute: "/about.html" or "/bmcri-website/about.html"
             el.setAttribute(attr, BASE + cleanPath);
         });
     }
@@ -114,7 +121,6 @@ document.addEventListener("DOMContentLoaded", () => {
     async function loadSharedComponents() {
         try {
             const getComp = async (file) => {
-                // Fetch using the dynamic BASE
                 const req = await fetch(BASE + file);
                 return req.ok ? await req.text() : null;
             };
@@ -122,14 +128,14 @@ document.addEventListener("DOMContentLoaded", () => {
             const headerHTML = await getComp('header.html');
             if (headerHTML) {
                 document.getElementById('global-header').innerHTML = headerHTML;
-                fixNavLinks(); // Fixes links inside the newly loaded header
+                fixNavLinks(); // Fix links immediately after injecting header
                 initNavigation();
             }
 
             const footerHTML = await getComp('footer.html');
             if (footerHTML) {
                 document.getElementById('global-footer').innerHTML = footerHTML;
-                fixNavLinks(); // Fixes links inside the newly loaded footer
+                fixNavLinks(); // Fix links immediately after injecting footer
                 const yearEl = document.getElementById("current-year");
                 if (yearEl) yearEl.textContent = new Date().getFullYear();
             }
@@ -141,12 +147,13 @@ document.addEventListener("DOMContentLoaded", () => {
     // --- 6. HOMEPAGE CONTENT LOADER ---
     async function loadHomeContent() {
         const mainContent = document.getElementById("main-content-area");
-        if (!mainContent) return; // Not homepage
+        if (!mainContent) return;
 
         try {
             const res = await fetch(BASE + "homepage.html");
             if (res.ok) {
                 mainContent.innerHTML = await res.text();
+                fixNavLinks(); // Run fix again in case homepage.html has relative links
                 initScrollReveal();
                 initSlideshow();
             }
@@ -157,14 +164,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // --- 7. NAVIGATION LOGIC ---
     function initNavigation() {
-        // Determine current file name (e.g., 'contact.html')
         const currentPath = window.location.pathname;
+        // Clean up current path to handle Vercel's clean URLs if necessary
         const currentFile = currentPath.split('/').pop() || 'index.html';
 
         document.querySelectorAll(".nav-list a").forEach(link => {
             const href = link.getAttribute("href");
             if (!href) return;
-            // Robust check: does the link end with the current filename?
+
+            // Highlight logic: Check if the link href ends with the current filename
             if (href.endsWith(currentFile)) {
                 link.classList.add("active");
                 const parent = link.closest(".nav-item");
@@ -172,6 +180,7 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
+        // Mobile Menu Logic
         const btn = document.querySelector(".mobile-menu-toggle");
         const nav = document.querySelector(".nav-list");
         const overlay = document.getElementById("sidebar-overlay");
@@ -192,10 +201,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 const link = e.target.closest("a");
                 if (!link) return;
                 const sub = link.nextElementSibling;
+                // Handle Dropdowns
                 if (sub && (sub.matches('.dropdown-menu') || sub.matches('.dropdown-submenu'))) {
                     e.preventDefault(); e.stopPropagation();
                     link.parentElement.classList.toggle("dropdown-active");
                 } else {
+                    // Close menu on normal link click
                     toggle(true);
                 }
             };
